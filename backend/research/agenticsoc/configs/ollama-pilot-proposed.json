@@ -1,0 +1,26 @@
+{
+  "configuration_version": "ollama-pilot-proposed.v1",
+  "dataset_version": "agenticsoc-synthetic-v1",
+  "sample_seed": 20261024,
+  "cases_per_scenario": 3,
+  "replicates": 1,
+  "condition_order_seed": 20261024,
+  "model": {
+    "provider": "ollama",
+    "model": "qwen3:4b-instruct-2507-q4_K_M",
+    "temperature": 0.0,
+    "max_output_tokens": 1024,
+    "input_price_per_million": null,
+    "output_price_per_million": null,
+    "price_schedule_id": null,
+    "price_currency": null,
+    "simulated_capabilities": ["search_logs", "enrich_indicator", "write_report"]
+  },
+  "safety": {
+    "max_model_calls": 72,
+    "request_timeout_seconds": 180,
+    "context_window_tokens": 8192,
+    "seed": 20261024
+  },
+  "pilot_status": "proposed; no run is authorized"
+}

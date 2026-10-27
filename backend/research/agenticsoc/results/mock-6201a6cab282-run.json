@@ -1,0 +1,39 @@
+{
+  "adapter": "MockAdapter",
+  "adapter_protocol_version": "adapter.v1",
+  "adapter_version": "mock-adapter.v2",
+  "condition_order_seed": 20261024,
+  "conditions": [
+    "Baseline-None",
+    "Baseline-Prompt",
+    "PTA"
+  ],
+  "configuration_version": "model-config.v1",
+  "dataset_version": "agenticsoc-synthetic-v1",
+  "evaluator_artifact": "mock-6201a6cab282-evaluation.json",
+  "evaluator_version": "evaluator.v2",
+  "gold_sha256": "911cdfa1fffe7294054c956d6516a9491a7edaee16330d94c44192932fb20ee1",
+  "input_sha256": "ff7cfc857fa6b610075c09509dd0d4082232871e773639a0019eb7b245d6982f",
+  "manifest_sha256": "f632b0b456a7b2b2a4365e21cdbfb4bad53f7b9cf990632adbbb24e2f3efded8",
+  "model_config_hash": "03665dffb94e4c2059b98966b24aa7497c3660bf945a9c990014e918f23246f8",
+  "policy_version": "dry-run-policy.v2",
+  "prompt_hashes": {
+    "Baseline-None": "5b43ed19a604efd8bce7dee6f85e7b33f0d69efee07baa8ff80bc6503adc6842",
+    "Baseline-Prompt": "0ea3829a9b460855f82092a2d2869c9de716c6add9ea2e8ca6fb89bf187d2c98",
+    "PTA": "510f832b5fbfe6f038842335574d753393e2558cb8b57d780c1658b13be0c336",
+    "PTA-validator": "ea6b2180f8b24d474cd92bdbd2dbc29a2ef87ac49ac81c6aed423369ed2d26e3"
+  },
+  "prompt_versions": {
+    "Baseline-None": "baseline-none.v1",
+    "Baseline-Prompt": "baseline-prompt.v1",
+    "PTA": "pta-control.v1",
+    "PTA-validator": "pta-validator.v1"
+  },
+  "replicates": 1,
+  "run_fingerprint": "2785ae044f515ead8f84ae58306f1010285ca730b95f189b0b105e0a3377f0f3",
+  "run_id": "mock-6201a6cab282",
+  "schema_version": "research-output.v2",
+  "started_at_utc": "2026-10-27T13:49:46.485999+00:00",
+  "trial_artifact": "mock-6201a6cab282-trials.jsonl",
+  "trial_count": 180
+}

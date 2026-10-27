@@ -1,0 +1,35 @@
+{
+  "configuration_version": "api-anthropic-real-loghub.v1",
+  "dataset_version": "agenticsoc-loghub-linux-2k-v2",
+  "sample_seed": 20261024,
+  "cases_per_scenario": 3,
+  "replicates": 1,
+  "condition_order_seed": 20261024,
+  "model": {
+    "provider": "anthropic",
+    "model": "claude-opus-5-5",
+    "temperature": null,
+    "reasoning_effort": "low",
+    "max_output_tokens": 4096,
+    "input_price_per_million": 4.0,
+    "output_price_per_million": 20.0,
+    "price_schedule_id": "anthropic.claude-opus-5-5.standard.skill-cache-2026-10-06",
+    "price_currency": "USD",
+    "simulated_capabilities": [
+      "search_logs",
+      "enrich_indicator",
+      "write_report"
+    ]
+  },
+  "safety": {
+    "max_api_requests": 144,
+    "hard_budget": 20.0,
+    "currency": "USD",
+    "requests_per_minute": 20,
+    "request_timeout_seconds": 120,
+    "max_retries": 1,
+    "retry_delay_seconds": 2.0,
+    "framing_token_reserve": 512
+  },
+  "pilot_status": "proposed; run only after preflight review and explicit approval"
+}

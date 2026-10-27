@@ -1,0 +1,10 @@
+{
+  "provider": "mock",
+  "model": "offline-fixture-v1",
+  "temperature": 0.0,
+  "max_output_tokens": 512,
+  "input_price_per_million": null,
+  "output_price_per_million": null,
+  "price_schedule_id": null,
+  "simulated_capabilities": ["search_logs", "enrich_indicator", "write_report"]
+}

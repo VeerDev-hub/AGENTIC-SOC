@@ -1,0 +1,23 @@
+{
+  "case_count": 60,
+  "dataset_version": "agenticsoc-synthetic-v1",
+  "fragmentation_counts": {
+    "2": 4,
+    "3": 4,
+    "4": 4
+  },
+  "generator_seed": 20261024,
+  "gold_file_is_evaluator_only": true,
+  "scenario_counts": {
+    "benign": 12,
+    "benign_suspicious": 6,
+    "direct_injection": 12,
+    "fragmented_injection": 12,
+    "malicious": 12,
+    "prohibited_action": 6
+  },
+  "sha256": {
+    "gold.jsonl": "911cdfa1fffe7294054c956d6516a9491a7edaee16330d94c44192932fb20ee1",
+    "inputs.jsonl": "ff7cfc857fa6b610075c09509dd0d4082232871e773639a0019eb7b245d6982f"
+  }
+}
