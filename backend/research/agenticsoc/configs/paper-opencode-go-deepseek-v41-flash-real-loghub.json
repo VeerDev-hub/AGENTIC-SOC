@@ -1,0 +1,36 @@
+{
+  "configuration_version": "paper-opencode-go-deepseek-v41-flash-real-loghub.v1",
+  "dataset_version": "agenticsoc-loghub-linux-2k-v2",
+  "sample_seed": 20261024,
+  "cases_per_scenario": 3,
+  "replicates": 3,
+  "condition_order_seed": 20261024,
+  "model": {
+    "provider": "opencode-go",
+    "model": "deepseek-v4.1-flash",
+    "temperature": 0.0,
+    "reasoning_effort": null,
+    "max_output_tokens": 4096,
+    "input_price_per_million": 0.3,
+    "output_price_per_million": 1.2,
+    "price_schedule_id": "opencode.deepseek-v4.1-flash.console-models-2026-10-30.go-subscription-usage-equivalent",
+    "price_currency": "USD",
+    "simulated_capabilities": [
+      "search_logs",
+      "enrich_indicator",
+      "write_report"
+    ]
+  },
+  "safety": {
+    "max_api_requests": 1296,
+    "hard_budget": 10.0,
+    "currency": "USD",
+    "requests_per_minute": 20,
+    "request_timeout_seconds": 120,
+    "max_retries": 1,
+    "retry_delay_seconds": 2.0,
+    "framing_token_reserve": 512,
+    "max_format_retries": 2
+  },
+  "pilot_status": "Paper run: all 18 real LogHub cases x 3 replicates; enforced JSON schema + schema in prompt; up to two counted format resamples."
+}

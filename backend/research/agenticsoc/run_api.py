@@ -12,6 +12,7 @@ never printed. Preflight only reports whether the variable is set.
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 from datetime import datetime, timezone
@@ -25,7 +26,7 @@ from .prompts import PROMPTS, PROMPT_VERSIONS
 from .providers import adapter_version, effective_prompt, make_adapter, provider_spec, sdk_version
 from .real_loghub import DATASET_VERSION as REAL_DATASET_VERSION, render_paper_tables, score_real_trials
 from .runner import _pta_fields, _request, run_matrix, stable_hash
-from .schema import Condition, ModelConfig
+from .schema import Condition, ModelConfig, TrialRecord
 from .scoring import summarize
 
 ENV_FILE = PACKAGE / ".env"
@@ -57,6 +58,10 @@ def load_api_config(path):
             raise ValueError(f"safety.{key} must be a positive integer")
     if type(safety.get("max_retries")) is not int or not 0 <= safety["max_retries"] <= 3:
         raise ValueError("safety.max_retries must be an integer between zero and three")
+    if type(safety.get("max_format_retries", 0)) is not int or not 0 <= safety.get("max_format_retries", 0) <= 2:
+        raise ValueError("safety.max_format_retries must be an integer between zero and two")
+    if safety.get("max_format_retries", 0) and model.provider == "openai":
+        raise ValueError("safety.max_format_retries is not supported for the openai provider")
     for key in ("hard_budget", "request_timeout_seconds"):
         if type(safety.get(key)) not in (int, float) or safety[key] <= 0:
             raise ValueError(f"safety.{key} must be positive")
@@ -76,10 +81,12 @@ def preflight(config_path):
     frozen, cases, _gold, manifest_path = load_benchmark(raw)
     safety = raw["safety"]
     planned = expected_request_stages(len(cases), raw["replicates"])
-    worst_requests = planned * (safety["max_retries"] + 1)
+    # Every transport retry may be repeated for each format resample.
+    attempts_per_stage = (safety["max_retries"] + 1) * (safety.get("max_format_retries", 0) + 1)
+    worst_requests = planned * attempts_per_stage
     if worst_requests > safety["max_api_requests"]:
         raise ValueError(f"max_api_requests={safety['max_api_requests']} cannot cover {planned} stage calls "
-                         f"with {safety['max_retries']} retries each ({worst_requests})")
+                         f"with {attempts_per_stage} attempts each ({worst_requests})")
     input_bytes = 0
     for case in cases:
         evidence = _pta_fields(case)
@@ -94,7 +101,7 @@ def preflight(config_path):
     in_price, out_price = model.input_price_per_million, model.output_price_per_million
     # Budget reservation: one token per byte plus framing, full output cap, every retry.
     worst_case = ((input_bytes + planned * safety["framing_token_reserve"]) * in_price +
-                  planned * model.max_output_tokens * out_price) / 1_000_000 * (safety["max_retries"] + 1)
+                  planned * model.max_output_tokens * out_price) / 1_000_000 * attempts_per_stage
     if worst_case > safety["hard_budget"]:
         raise ValueError(f"hard_budget {safety['hard_budget']} is below the worst-case reservation {worst_case:.4f}")
     est_input_tokens = input_bytes // BYTES_PER_TOKEN_ESTIMATE + planned * 50
@@ -157,11 +164,22 @@ def run(args, *, client=None, pace=True):
         raise ValueError(f"{spec.env_var} is not set; no request was sent")
     safety = raw["safety"]
     frozen, cases, gold, _manifest_path = load_benchmark(raw)
-    budget = LiveRunBudget(max_requests=safety["max_api_requests"], hard_budget=safety["hard_budget"],
+    share = 1.0
+    shard = getattr(args, "shard", None)
+    run_id = args.run_id or f"api-{model.provider}-{uuid4().hex[:10]}"
+    if shard:
+        # Round-robin case shard; request and spend caps are split in proportion.
+        index, count = (int(part) for part in shard.split("/"))
+        if not 0 <= index < count:
+            raise ValueError("--shard must be i/n with 0 <= i < n")
+        share = math.ceil(len(cases) / count) / len(cases)
+        cases = cases[index::count]
+        run_id = f"{run_id}-shard{index}of{count}"
+    budget = LiveRunBudget(max_requests=math.ceil(safety["max_api_requests"] * share),
+                           hard_budget=safety["hard_budget"] * share,
                            currency=safety["currency"],
                            minimum_interval_seconds=60 / safety["requests_per_minute"] if pace else 0.0,
                            framing_token_reserve=safety["framing_token_reserve"])
-    run_id = args.run_id or f"api-{model.provider}-{uuid4().hex[:10]}"
     started_at = datetime.now(timezone.utc).isoformat()
     trials = run_matrix(
         cases=[case.model_dump(mode="json") for case in cases], condition_values=list(Condition),
@@ -169,14 +187,29 @@ def run(args, *, client=None, pace=True):
         adapter_factory=lambda: make_adapter(
             model.provider, budget=budget, timeout_seconds=safety["request_timeout_seconds"],
             max_retries=safety["max_retries"], retry_delay_seconds=safety.get("retry_delay_seconds", 1.0),
-            client=client),
+            client=client, max_format_retries=safety.get("max_format_retries", 0)),
         order_seed=raw["condition_order_seed"],
         dataset_input_sha256=frozen["input_sha256"], dataset_gold_sha256=frozen["gold_sha256"],
         dataset_manifest_sha256=report["manifest_sha256"], dataset_version=frozen["manifest"]["dataset_version"],
     )
+    metadata = {
+        **{k: v for k, v in report.items() if k not in ("execution_authorized", "preflight_only", "network_requests")},
+        "run_id": run_id, "shard": shard, "started_at_utc": started_at,
+        "finished_at_utc": datetime.now(timezone.utc).isoformat(),
+        "configuration_version": raw["configuration_version"],
+        "actual_api_requests": budget.request_count, "budget_reserved": round(budget.reserved_cost, 6),
+        "research_code_sha256": _code_hashes(),
+    }
+    result = _write_artifacts(raw, trials, gold, metadata, Path(args.output_dir))
+    result.update(api_requests=budget.request_count, currency=safety["currency"])
+    print(json.dumps(result, indent=2))
+    return result
+
+
+def _write_artifacts(raw, trials, gold, metadata, output_dir):
+    run_id = metadata["run_id"]
     is_real = raw["dataset_version"] == REAL_DATASET_VERSION
     summary = score_real_trials(trials, gold) if is_real else summarize(trials, gold)
-    output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     files = {"trial_artifact": output_dir / f"{run_id}-trials.jsonl",
              "evaluation_artifact": output_dir / f"{run_id}-evaluation.json"}
@@ -191,30 +224,48 @@ def run(args, *, client=None, pace=True):
         files["tables_markdown"].write_text(markdown, encoding="utf-8")
         files["tables_csv"].write_text(csv_text, encoding="utf-8")
     metadata = {
-        **{k: v for k, v in report.items() if k not in ("execution_authorized", "preflight_only", "network_requests")},
-        "run_id": run_id, "started_at_utc": started_at,
-        "finished_at_utc": datetime.now(timezone.utc).isoformat(),
-        "configuration_version": raw["configuration_version"],
+        **metadata,
         "returned_models": sorted({m for t in trials for m in t.returned_models}),
-        "actual_api_requests": budget.request_count, "budget_reserved": round(budget.reserved_cost, 6),
         "estimated_cost_known_sum": round(sum(t.cost_amount or 0 for t in trials), 6),
         "trial_count": len(trials), "incomplete_trials": sum(t.status != "complete" for t in trials),
         "failure_kinds": sorted({c.failure_kind for t in trials for c in t.call_records if c.failure_kind}),
-        "research_code_sha256": _code_hashes(),
         **{k: p.name for k, p in files.items()},
     }
     files["run_artifact"] = output_dir / f"{run_id}-run.json"
     files["run_artifact"].write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     result = {k: str(p) for k, p in files.items()}
-    result.update(api_requests=budget.request_count, incomplete_trials=metadata["incomplete_trials"],
-                  estimated_cost=metadata["estimated_cost_known_sum"], currency=safety["currency"])
+    result.update(incomplete_trials=metadata["incomplete_trials"], estimated_cost=metadata["estimated_cost_known_sum"])
+    return result
+
+
+def merge(args):
+    """Combine shard artifacts of one run into a single scored run; no network."""
+    raw, _model, _spec = load_api_config(args.config)
+    report = preflight(args.config)
+    _frozen, _cases, gold, _manifest_path = load_benchmark(raw)
+    output_dir = Path(args.output_dir)
+    shard_ids = [f"{args.run_id}-shard{i}of{args.shards}" for i in range(args.shards)]
+    metas = [json.loads((output_dir / f"{sid}-run.json").read_text(encoding="utf-8")) for sid in shard_ids]
+    if any(m["pilot_fingerprint"] != report["pilot_fingerprint"] for m in metas):
+        raise ValueError("Shard fingerprints differ from the current preflight; refusing to merge")
+    trials = [TrialRecord.model_validate_json(line) for sid in shard_ids
+              for line in (output_dir / f"{sid}-trials.jsonl").read_text(encoding="utf-8").splitlines() if line]
+    metadata = {
+        **{k: v for k, v in metas[0].items() if k in report or k in ("configuration_version", "research_code_sha256")},
+        "run_id": args.run_id, "merged_from_shards": shard_ids,
+        "started_at_utc": min(m["started_at_utc"] for m in metas),
+        "finished_at_utc": max(m["finished_at_utc"] for m in metas),
+        "actual_api_requests": sum(m["actual_api_requests"] for m in metas),
+        "budget_reserved": round(sum(m["budget_reserved"] for m in metas), 6),
+    }
+    result = _write_artifacts(raw, trials, gold, metadata, output_dir)
     print(json.dumps(result, indent=2))
     return result
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Hosted-API AgenticSOC pilot (preflight or confirmed run)")
-    parser.add_argument("command", choices=["preflight", "run"])
+    parser.add_argument("command", choices=["preflight", "run", "merge"])
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, default=PACKAGE / "results-api")
     parser.add_argument("--run-id")
@@ -224,11 +275,15 @@ def main(argv=None):
     parser.add_argument("--confirm-max-requests", type=int)
     parser.add_argument("--confirm-budget", type=float)
     parser.add_argument("--confirm-fingerprint")
+    parser.add_argument("--shard", help="run only cases i, i+n, ... as i/n; caps are split in proportion")
+    parser.add_argument("--shards", type=int, help="merge: number of shards written under --run-id")
     args = parser.parse_args(argv)
     load_env_file()
     try:
         if args.command == "preflight":
             print(json.dumps(preflight(args.config), indent=2, sort_keys=True))
+        elif args.command == "merge":
+            merge(args)
         else:
             run(args)
     except Exception as exc:

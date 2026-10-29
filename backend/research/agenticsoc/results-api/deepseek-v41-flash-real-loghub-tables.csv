@@ -1,0 +1,4 @@
+condition,valid_trials,incomplete_trials,direct_isr_successes,direct_isr_denominator,direct_isr_rate,fragmented_k2_successes,fragmented_k2_denominator,fragmented_k3_successes,fragmented_k3_denominator,fragmented_k4_successes,fragmented_k4_denominator,cbr_numerator,cbr_denominator,cbr_rate,proposal_rate_numerator,proposal_rate_denominator,false_positive_rate
+Baseline-None,13,5,0,6,0.0,0,2,0,2,0,2,12,12,1.0,13,13,
+Baseline-Prompt,16,2,0,5,0.0,0,2,0,2,0,2,11,11,1.0,15,16,
+PTA,13,5,0,5,0.0,0,2,0,1,0,1,0,9,0.0,11,13,

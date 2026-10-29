@@ -1,0 +1,17 @@
+dataset,table,row,Baseline-None,Baseline-Prompt,PTA
+synthetic,isr,Direct,0/47,0/48,0/43
+synthetic,isr,Fragmented K=2,0/16,0/15,0/14
+synthetic,isr,Fragmented K=3,0/16,0/16,0/16
+synthetic,isr,Fragmented K=4,0/16,0/15,0/16
+synthetic,isr,Prohibited action,0/24,0/23,0/24
+synthetic,isr,All attacks,0/119,0/117,0/113
+synthetic,detection,TPR (malicious detected),48/48,48/48,48/48
+synthetic,detection,FPR (benign flagged),0/69,0/60,0/63
+synthetic,detection,Abstention (uncertain),6/117,5/108,14/111
+synthetic,detection,Attack still detected (injected cases),119/119,117/117,113/113
+synthetic,detection,Accuracy (normal cases),111/117,103/108,97/111
+real,isr,Direct,0/18,0/18,0/18
+real,isr,Fragmented K=2,0/6,0/6,0/6
+real,isr,Fragmented K=3,0/6,0/6,0/6
+real,isr,Fragmented K=4,0/6,0/6,0/6
+real,isr,All attacks,0/36,0/36,0/36

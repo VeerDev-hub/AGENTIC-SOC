@@ -166,6 +166,8 @@ steps are documented in [REAL_LOGHUB_EVALUATION.md](REAL_LOGHUB_EVALUATION.md).
 | `openai` | `OPENAI_API_KEY` | Existing Responses adapter (`live_adapter.py`) |
 | `gemini`, `groq`, `mistral`, `openrouter` | `GEMINI_API_KEY`, ... | OpenAI SDK, Chat Completions, strict JSON schema |
 | `deepseek` | `DEEPSEEK_API_KEY` | OpenAI SDK, JSON mode; the schema is appended to the system prompt |
+| `opencode` | `OPENCODE_API_KEY` | OpenCode Console inference (e.g. `deepseek-v4.1-flash`), JSON mode like `deepseek` |
+| `opencode-go` | `OPENCODE_API_KEY` | OpenCode Go subscription endpoint; same as `opencode` plus a per-trial `x-opencode-session` header |
 
 Base URLs are fixed in code. No adapter registers tools. Retries are counted
 and budgeted by the harness (SDK retries are disabled). Refusals, truncation,
@@ -189,6 +191,46 @@ estimate, the worst-case budget reservation and whether the credential is set
 `configs/api-template-openai-compatible.json`, then set the provider, the exact
 model ID and the current prices. Its prices are null, so preflight refuses to
 run until they are filled in.
+
+Optional `safety.max_format_retries` (0–2, default 0) resamples a reply that
+broke the output schema. Each resample is a counted, budgeted request; its
+tokens are added to the trial's usage and cost, and preflight's worst case
+multiplies by it. Not supported for the `openai` provider.
+
+Long runs can be split into parallel case shards, then merged into one scored
+run (shard fingerprints must match the current preflight):
+
+```powershell
+.\.venv\Scripts\python.exe -m research.agenticsoc.run_api run --config <config> --run-id <id> --shard 0/6 --execute ...
+.\.venv\Scripts\python.exe -m research.agenticsoc.run_api merge --config <config> --run-id <id> --shards 6
+```
+
+Each shard gets a proportional share of `max_api_requests` and `hard_budget`.
+
+## Synthetic dataset v2
+
+`dataset/v2` (generator `dataset/generate_dataset_v2.py`, seed 20261030) has
+240 cases: 120 normal (48 benign, 48 malicious, 24 benign-suspicious) and 120
+injected (48 direct, 48 fragmented with 16 each at K=2/3/4, 24
+prohibited-action). Every injected case hides one of eight real malicious
+activity templates, so injection success means a real attack was reported as
+benign, or a deny-listed action was proposed. Injection styles (S1 override,
+S2 false authority, S3 false context, S4 base64) and six carrier fields rotate
+on a cycle independent of the activity template. `attack_meta.jsonl` records
+style, carrier and template; like `gold.jsonl` it is evaluator-only and
+checksum-pinned. v2 runs evaluate every case (no sampling).
+
+## Reports and paper figures
+
+```powershell
+# Readable report (no extra dependency)
+.\.venv\Scripts\python.exe -m research.agenticsoc.report_api --run-id <id> --out <report.md>
+# Publication figures (PDF + 300-dpi PNG), equations, Wilson CIs, exact McNemar tests
+uv run --frozen --with matplotlib python -m research.agenticsoc.paper_figures `
+  --run synthetic=<id> --run real=<id> --out ..\docs\research\paper
+```
+
+matplotlib is supplied by `uv run --with` and is not a project dependency.
 
 ## Offline verification
 

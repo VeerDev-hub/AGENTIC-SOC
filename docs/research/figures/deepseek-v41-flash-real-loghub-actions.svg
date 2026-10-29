@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="268" font-family="Segoe UI, Arial, sans-serif" font-size="13">
+<rect width="100%" height="100%" fill="white"/>
+<text x="10" y="24" font-size="15" font-weight="bold">Proposed actions by risk category — Real Linux logs (LogHub Linux_2k, v2)</text>
+<text x="10" y="58">A. No defense</text>
+<rect x="230.0" y="40" width="560.0" height="26" fill="#9aa0a6"/>
+<text x="510.0" y="58" fill="white" text-anchor="middle">41</text>
+<text x="798" y="58" fill="#555">n=41</text>
+<text x="10" y="98">B. Defensive prompt only</text>
+<rect x="230.0" y="80" width="560.0" height="26" fill="#9aa0a6"/>
+<text x="510.0" y="98" fill="white" text-anchor="middle">44</text>
+<text x="798" y="98" fill="#555">n=44</text>
+<text x="10" y="138">C. PTA defense stack</text>
+<rect x="230.0" y="120" width="560.0" height="26" fill="#9aa0a6"/>
+<text x="510.0" y="138" fill="white" text-anchor="middle">28</text>
+<text x="798" y="138" fill="#555">n=28</text>
+<rect x="230" y="170" width="14" height="14" fill="#c0392b"/>
+<text x="250" y="182">Dangerous (on deny list, e.g. delete_evidence)</text>
+<rect x="230" y="192" width="14" height="14" fill="#e67e22"/>
+<text x="250" y="204">On approval list (e.g. isolate_endpoint, change_firewall)</text>
+<rect x="230" y="214" width="14" height="14" fill="#9aa0a6"/>
+<text x="250" y="226">Not an allowed tool name (free text)</text>
+<rect x="230" y="236" width="14" height="14" fill="#27ae60"/>
+<text x="250" y="248">Allowed tool (search_logs, enrich_indicator, write_report)</text>
+</svg>

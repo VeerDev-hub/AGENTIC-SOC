@@ -1,4 +1,4 @@
-"""Fail-closed verification for the frozen synthetic v1 dataset."""
+"""Fail-closed verification for the frozen synthetic datasets (v1, v2)."""
 
 import hashlib
 import json
@@ -14,6 +14,15 @@ DATASET_VERSION = "agenticsoc-synthetic-v1"
 PINNED_SHA256 = {
     "inputs.jsonl": "ff7cfc857fa6b610075c09509dd0d4082232871e773639a0019eb7b245d6982f",
     "gold.jsonl": "911cdfa1fffe7294054c956d6516a9491a7edaee16330d94c44192932fb20ee1",
+}
+DATASET_VERSION_V2 = "agenticsoc-synthetic-v2"
+PINNED_SHA256_BY_VERSION = {
+    DATASET_VERSION: PINNED_SHA256,
+    DATASET_VERSION_V2: {
+        "inputs.jsonl": "7801b880a529e65c2e23fb357a2a8be113bb1c1d2b727c53e4bf5dd5b1a60dd0",
+        "gold.jsonl": "a51a0bc48f72e29a06c3492ed5011a7269956b200d129cf7c0b09cce7d92f2e1",
+        "attack_meta.jsonl": "02128b6190ce21f30b9f3f71981c7f565f0397dcc2a223a224023b93445d44e1",
+    },
 }
 
 
@@ -39,7 +48,7 @@ def _unique(rows, name):
 
 def validate_record_sets(inputs, gold, manifest):
     """Validate in-memory records too; this never repairs or regenerates data."""
-    if manifest.get("dataset_version") != DATASET_VERSION:
+    if manifest.get("dataset_version") not in PINNED_SHA256_BY_VERSION:
         raise DatasetIntegrityError("Unsupported dataset version")
     if len(inputs) != manifest.get("case_count") or len(gold) != manifest.get("case_count"):
         raise DatasetIntegrityError("Dataset record count does not match manifest")
@@ -75,11 +84,12 @@ def verify_dataset(dataset_dir: Path):
         manifest = json.loads((dataset_dir / "manifest.json").read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise DatasetIntegrityError(f"Cannot read manifest: {exc}") from exc
-    if manifest.get("dataset_version") != DATASET_VERSION:
+    pinned = PINNED_SHA256_BY_VERSION.get(manifest.get("dataset_version"))
+    if pinned is None:
         raise DatasetIntegrityError("Unsupported dataset version")
     inputs, gold = [], []
     observed = {}
-    for name in ("inputs.jsonl", "gold.jsonl"):
+    for name in pinned:
         try:
             raw = (dataset_dir / name).read_bytes()
         except OSError as exc:
@@ -87,12 +97,12 @@ def verify_dataset(dataset_dir: Path):
         observed[name] = hashlib.sha256(raw).hexdigest()
         if manifest.get("sha256", {}).get(name) != observed[name]:
             raise DatasetIntegrityError(f"Manifest checksum mismatch for {name}")
-        if PINNED_SHA256.get(name) != observed[name]:
+        if pinned[name] != observed[name]:
             raise DatasetIntegrityError(f"Frozen checksum changed for {name}; create a versioned dataset")
         rows = _jsonl(dataset_dir / name)
         if name == "inputs.jsonl":
             inputs = rows
-        else:
+        elif name == "gold.jsonl":
             gold = rows
     typed_inputs, typed_gold = validate_record_sets(inputs, gold, manifest)
     return {

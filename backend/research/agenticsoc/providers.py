@@ -9,7 +9,7 @@ PROVIDERS and are never copied into records or output.
 Supported providers:
   anthropic   - official Anthropic SDK, Messages API with structured output
   openai      - existing OpenAI Responses adapter (live_adapter.py)
-  gemini, deepseek, groq, mistral, openrouter
+  gemini, deepseek, groq, mistral, openrouter, opencode, opencode-go
               - OpenAI-compatible Chat Completions via the OpenAI SDK
 """
 
@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import os
 import time
+import uuid
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
 
@@ -36,6 +37,11 @@ class ProviderSpec:
     # "json_schema": provider enforces the schema; "json_object": provider only
     # guarantees JSON, so the schema is appended to the system prompt.
     structured_output: str = "json_schema"
+    # OpenCode Go routes by a stable per-conversation x-opencode-session header.
+    session_header: bool = False
+    # Also show the schema in the system prompt when the provider's enforcement
+    # is partial (e.g. ignores maxLength), so the model sees every limit.
+    schema_in_prompt: bool = False
 
 
 PROVIDERS = {
@@ -48,6 +54,10 @@ PROVIDERS = {
     "groq": ProviderSpec("GROQ_API_KEY", "openai", "https://api.groq.com/openai/v1"),
     "mistral": ProviderSpec("MISTRAL_API_KEY", "openai", "https://api.mistral.ai/v1"),
     "openrouter": ProviderSpec("OPENROUTER_API_KEY", "openai", "https://openrouter.ai/api/v1"),
+    "opencode": ProviderSpec("OPENCODE_API_KEY", "openai", "https://opencode.ai/inference/openai/v1",
+                             structured_output="json_object"),
+    "opencode-go": ProviderSpec("OPENCODE_API_KEY", "openai", "https://opencode.ai/inference/go/openai/v1",
+                                session_header=True, schema_in_prompt=True),
 }
 
 JSON_OBJECT_SUFFIX = ("\n\nReturn only one JSON object that conforms to this JSON Schema:\n" +
@@ -70,7 +80,8 @@ def sdk_version(provider: str) -> str | None:
 
 def effective_prompt(provider: str, prompt: str) -> str:
     """The exact system text sent, so preflight cost estimates match the run."""
-    return prompt + JSON_OBJECT_SUFFIX if provider_spec(provider).structured_output == "json_object" else prompt
+    spec = provider_spec(provider)
+    return prompt + JSON_OBJECT_SUFFIX if spec.structured_output == "json_object" or spec.schema_in_prompt else prompt
 
 
 def _request_json(request: ModelRequest) -> str:
@@ -84,8 +95,8 @@ class _BudgetedAdapter:
     adapter_version = "budgeted-adapter.v1"
 
     def __init__(self, *, provider: str, budget: LiveRunBudget, timeout_seconds: float = 60.0,
-                 max_retries: int = 1, retry_delay_seconds: float = 1.0, client=None):
-        if timeout_seconds <= 0 or max_retries < 0 or retry_delay_seconds < 0:
+                 max_retries: int = 1, retry_delay_seconds: float = 1.0, client=None, max_format_retries: int = 0):
+        if timeout_seconds <= 0 or max_retries < 0 or retry_delay_seconds < 0 or max_format_retries < 0:
             raise ValueError("Timeout must be positive and retry settings non-negative")
         self.provider = provider
         self.spec = provider_spec(provider)
@@ -93,6 +104,8 @@ class _BudgetedAdapter:
         self.timeout_seconds = timeout_seconds
         self.max_retries = max_retries
         self.retry_delay_seconds = retry_delay_seconds
+        # Resamples after a schema-invalid reply; each one is a counted, budgeted request.
+        self.max_format_retries = max_format_retries
         if client is None and not os.environ.get(self.spec.env_var):
             raise LiveAdapterError("provider", f"{self.spec.env_var} is not set")
         self.client = client if client is not None else self._make_client()
@@ -115,44 +128,56 @@ class _BudgetedAdapter:
         user = _request_json(request)
         reserved = 0.0
         attempts = 0
-        response = None
-        for retry in range(self.max_retries + 1):
-            reserved += self.budget.authorize_request(
-                request_bytes=len((system + user).encode("utf-8")),
-                output_token_cap=config.max_output_tokens, config=config,
-            )
-            attempts += 1
-            try:
-                response = self._call(system=system, user=user, config=config)
-                break
-            except Exception as exc:
-                if retry >= self.max_retries or not _is_retryable(exc):
-                    raise LiveAdapterError(_failure_kind(exc), f"Provider request failed ({type(exc).__name__})",
-                                           attempts=attempts) from exc
-                time.sleep(self.retry_delay_seconds * (2 ** retry))
+        failed_transport = 0
+        discarded_in = discarded_out = 0
+        for format_retry in range(self.max_format_retries + 1):
+            response = None
+            for retry in range(self.max_retries + 1):
+                reserved += self.budget.authorize_request(
+                    request_bytes=len((system + user).encode("utf-8")),
+                    output_token_cap=config.max_output_tokens, config=config,
+                )
+                attempts += 1
+                try:
+                    response = self._call(system=system, user=user, config=config)
+                    break
+                except Exception as exc:
+                    failed_transport += 1
+                    if retry >= self.max_retries or not _is_retryable(exc):
+                        raise LiveAdapterError(_failure_kind(exc), f"Provider request failed ({type(exc).__name__})",
+                                               attempts=attempts) from exc
+                    time.sleep(self.retry_delay_seconds * (2 ** retry))
 
-        text, input_tokens, output_tokens, returned_model, problem = self._parse(response, config)
-        valid_usage = (type(input_tokens) is int and input_tokens >= 0 and
-                       type(output_tokens) is int and output_tokens >= 0)
-        # Cost is estimated from returned usage and the configured local price
-        # schedule. A retried call has unknown cost for the failed attempt.
-        estimated_cost = ((input_tokens * config.input_price_per_million +
-                           output_tokens * config.output_price_per_million) / 1_000_000
-                          if valid_usage and attempts == 1 else None)
-        failure = dict(attempts=attempts, input_tokens=input_tokens if valid_usage else None,
-                       output_tokens=output_tokens if valid_usage else None,
-                       estimated_cost=estimated_cost, currency=config.price_currency,
-                       returned_model=returned_model)
-        if problem is not None:
-            kind, message = problem
-            raise LiveAdapterError(kind, message, **failure)
-        try:
-            output = ModelOutput.model_validate_json(text or "")
-        except Exception as exc:
-            raise LiveAdapterError("malformed", "Provider output did not match the research schema",
-                                   **failure) from exc
-        if not valid_usage:
-            raise LiveAdapterError("provider", "Provider response omitted valid token usage", **failure)
+            text, input_tokens, output_tokens, returned_model, problem = self._parse(response, config)
+            valid_usage = (type(input_tokens) is int and input_tokens >= 0 and
+                           type(output_tokens) is int and output_tokens >= 0)
+            if valid_usage:
+                input_tokens += discarded_in
+                output_tokens += discarded_out
+            # Cost is estimated from returned usage (including discarded
+            # malformed replies) and the configured local price schedule. A
+            # failed transport attempt has unknown cost.
+            estimated_cost = ((input_tokens * config.input_price_per_million +
+                               output_tokens * config.output_price_per_million) / 1_000_000
+                              if valid_usage and failed_transport == 0 else None)
+            failure = dict(attempts=attempts, input_tokens=input_tokens if valid_usage else None,
+                           output_tokens=output_tokens if valid_usage else None,
+                           estimated_cost=estimated_cost, currency=config.price_currency,
+                           returned_model=returned_model)
+            if problem is not None:
+                kind, message = problem
+                raise LiveAdapterError(kind, message, **failure)
+            try:
+                output = ModelOutput.model_validate_json(text or "")
+            except Exception as exc:
+                if valid_usage and format_retry < self.max_format_retries:
+                    discarded_in, discarded_out = input_tokens, output_tokens
+                    continue
+                raise LiveAdapterError("malformed", "Provider output did not match the research schema",
+                                       **failure) from exc
+            if not valid_usage:
+                raise LiveAdapterError("provider", "Provider response omitted valid token usage", **failure)
+            break
         return AdapterResult(
             output=output, input_tokens=input_tokens, output_tokens=output_tokens,
             estimated_cost=estimated_cost,
@@ -219,8 +244,11 @@ class OpenAICompatibleChatAdapter(_BudgetedAdapter):
 
     def _make_client(self):
         from openai import OpenAI
+        # One adapter per trial, so one session ID per trial conversation.
+        headers = ({"x-opencode-session": f"agenticsoc-{uuid.uuid4().hex}",
+                    "User-Agent": "agenticsoc-research-harness"} if self.spec.session_header else None)
         return OpenAI(api_key=os.environ[self.spec.env_var], base_url=self.spec.base_url,
-                      timeout=self.timeout_seconds, max_retries=0)
+                      timeout=self.timeout_seconds, max_retries=0, default_headers=headers)
 
     def _call(self, *, system, user, config):
         if self.spec.structured_output == "json_schema":
@@ -256,17 +284,19 @@ class OpenAICompatibleChatAdapter(_BudgetedAdapter):
 
 
 def make_adapter(provider: str, *, budget: LiveRunBudget, timeout_seconds: float, max_retries: int,
-                 retry_delay_seconds: float, client=None):
+                 retry_delay_seconds: float, client=None, max_format_retries: int = 0):
     """Build a fresh adapter for one trial; no conversation state is shared."""
     common = dict(budget=budget, timeout_seconds=timeout_seconds, max_retries=max_retries,
                   retry_delay_seconds=retry_delay_seconds, client=client)
     spec = provider_spec(provider)
-    if provider == "anthropic":
-        return AnthropicMessagesAdapter(**common)
     if provider == "openai":
+        if max_format_retries:
+            raise ValueError("max_format_retries is not supported by the OpenAI Responses adapter")
         return OpenAIResponsesAdapter(**common)
+    if provider == "anthropic":
+        return AnthropicMessagesAdapter(max_format_retries=max_format_retries, **common)
     if spec.base_url is not None:
-        return OpenAICompatibleChatAdapter(provider=provider, **common)
+        return OpenAICompatibleChatAdapter(provider=provider, max_format_retries=max_format_retries, **common)
     raise ValueError(f"No adapter registered for {provider!r}")
 
 

@@ -1,0 +1,35 @@
+{
+  "configuration_version": "api-opencode-go-deepseek-v41-flash-synthetic.v1",
+  "dataset_version": "agenticsoc-synthetic-v1",
+  "sample_seed": 20261024,
+  "cases_per_scenario": 6,
+  "replicates": 1,
+  "condition_order_seed": 20261024,
+  "model": {
+    "provider": "opencode-go",
+    "model": "deepseek-v4.1-flash",
+    "temperature": 0.0,
+    "reasoning_effort": null,
+    "max_output_tokens": 4096,
+    "input_price_per_million": 0.30,
+    "output_price_per_million": 1.20,
+    "price_schedule_id": "opencode.deepseek-v4.1-flash.console-models-2026-10-30.go-subscription-usage-equivalent",
+    "price_currency": "USD",
+    "simulated_capabilities": [
+      "search_logs",
+      "enrich_indicator",
+      "write_report"
+    ]
+  },
+  "safety": {
+    "max_api_requests": 288,
+    "hard_budget": 2.0,
+    "currency": "USD",
+    "requests_per_minute": 20,
+    "request_timeout_seconds": 120,
+    "max_retries": 1,
+    "retry_delay_seconds": 2.0,
+    "framing_token_reserve": 512
+  },
+  "pilot_status": "OpenCode Go subscription; billed against the plan usage allowance, prices are the Console per-token equivalent used for budget accounting"
+}

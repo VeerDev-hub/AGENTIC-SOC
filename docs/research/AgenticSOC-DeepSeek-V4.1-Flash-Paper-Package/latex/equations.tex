@@ -1,0 +1,85 @@
+% AgenticSOC evaluation metrics. \input{equations.tex}; needs amsmath and amssymb.
+
+% (1) Injection success rate (ISR)
+\begin{equation}
+  \mathrm{ISR}_{s,a} = \frac{\left|\{\, t \in T_{s,a} : \mathrm{success}(t) = 1 \,\}\right|}{\left|T_{s,a}\right|}
+  \label{eq:injection-success-rate}
+\end{equation}
+
+% (2) Attack resistance rate (AR)
+\begin{equation}
+  \mathrm{AR}_{s,a} = 1 - \mathrm{ISR}_{s,a}
+  \label{eq:attack-resistance-rate}
+\end{equation}
+
+% (3) Fragment reassembly rate
+\begin{equation}
+  \mathrm{FRR}_s(K) = \mathrm{ISR}_{s,\,\mathrm{fragmented},\,K}, \qquad K \in \{2, 3, 4\}
+  \label{eq:fragment-reassembly-rate}
+\end{equation}
+
+% (4) Detection rate (true positive rate)
+\begin{equation}
+  \mathrm{TPR}_s = \frac{\left|\{\, t \in M_s : \hat{y}_t = \mathrm{malicious} \,\}\right|}{\left|M_s\right|}
+  \label{eq:detection-rate}
+\end{equation}
+
+% (5) False positive rate
+\begin{equation}
+  \mathrm{FPR}_s = \frac{\left|\{\, t \in N_s : \hat{y}_t = \mathrm{malicious} \,\}\right|}{\left|N_s\right|}
+  \label{eq:false-positive-rate}
+\end{equation}
+
+% (6) Accuracy on normal cases
+\begin{equation}
+  \mathrm{Acc}_s = \frac{\left|\{\, t \in M_s \cup N_s : \hat{y}_t = y_t \,\}\right|}{\left|M_s\right| + \left|N_s\right|}
+  \label{eq:accuracy-on-normal-cases}
+\end{equation}
+
+% (7) Abstention rate
+\begin{equation}
+  U_s = \frac{\left|\{\, t \in T_s : \hat{y}_t = \mathrm{uncertain} \,\}\right|}{\left|T_s\right|}
+  \label{eq:abstention-rate}
+\end{equation}
+
+% (8) Completion rate
+\begin{equation}
+  R_s = \frac{\left|T_s\right|}{\left|T_s^{\mathrm{all}}\right|}
+  \label{eq:completion-rate}
+\end{equation}
+
+% (9) Dangerous-proposal rate
+\begin{equation}
+  \mathrm{DPR}_s = \frac{\left|\{\, t \in T_s^{\mathrm{att}} : \exists\, a \in P(t),\ a \in \mathcal{D} \,\}\right|}{\left|T_s^{\mathrm{att}}\right|}
+  \label{eq:dangerous-proposal-rate}
+\end{equation}
+
+% (10) Capability breach rate
+\begin{equation}
+  \mathrm{CBR}_s = \frac{\left|\{\, t \in T_s^{\mathrm{att}} : \exists\, a \in P(t),\ a \notin \mathcal{C},\ \mathrm{approved}_s(a) \,\}\right|}{\left|T_s^{\mathrm{att}}\right|}
+  \label{eq:capability-breach-rate}
+\end{equation}
+
+% (11) Wilson 95% confidence interval
+\begin{equation}
+  \mathrm{CI}_{95} = \frac{\hat{p} + \frac{z^2}{2n} \pm z\sqrt{\frac{\hat{p}(1-\hat{p})}{n} + \frac{z^2}{4n^2}}}{1 + \frac{z^2}{n}}, \qquad \hat{p} = \frac{k}{n},\ z = 1.96
+  \label{eq:wilson-95-confidence-interval}
+\end{equation}
+
+% (12) Exact McNemar test (paired)
+\begin{equation}
+  p = \min\left(1,\ 2\sum_{i=0}^{\min(b,c)} \binom{b+c}{i}\, 0.5^{\,b+c}\right)
+  \label{eq:exact-mcnemar-test}
+\end{equation}
+
+% (13) Estimated monetary cost
+\begin{equation}
+  \mathrm{Cost} = \sum_{j} \frac{x_j\, P_{\mathrm{in}} + y_j\, P_{\mathrm{out}}}{10^{6}}, \qquad P_{\mathrm{in}} = \$0.30,\ P_{\mathrm{out}} = \$1.20
+  \label{eq:estimated-monetary-cost}
+\end{equation}
+
+% (14) Overhead ratio relative to A
+\begin{equation}
+  \rho_s = \frac{\bar{m}_s}{\bar{m}_A}, \qquad m \in \{\mathrm{latency},\ \mathrm{tokens},\ \mathrm{cost}\}
+  \label{eq:overhead-ratio-relative-to-a}
+\end{equation}

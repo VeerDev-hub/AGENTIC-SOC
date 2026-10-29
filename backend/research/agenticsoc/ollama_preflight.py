@@ -70,6 +70,11 @@ def load_benchmark(raw):
         frozen = verify_real_dataset(REAL_DATASET)
         cases = select_real_pilot_cases(frozen["inputs"], frozen["gold"])
         return frozen, cases, frozen["gold"], REAL_DATASET / "manifest.json"
+    if raw["dataset_version"] == "agenticsoc-synthetic-v2":
+        # v2 is balanced by construction; every case is evaluated, no sampling.
+        frozen = verify_dataset(PACKAGE / "dataset" / "v2")
+        cases = sorted(frozen["inputs"], key=lambda case: case.case_id)
+        return frozen, cases, frozen["gold"], PACKAGE / "dataset" / "v2" / "manifest.json"
     raise ValueError("Unsupported dataset version")
 
 
