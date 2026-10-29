@@ -328,3 +328,29 @@ Never commit `.env`.
 - Never drop failed trials. They are reported as incomplete, with reasons.
 - Never type metric numbers into the paper by hand. Copy them from the
   generated tables.
+
+---
+
+## 10. Update & Handover Completion (2026-10-29)
+
+The handover tasks and checklist items outlined above have been executed:
+
+1. **Dataset Integrity & Checksum Resolution**:
+   - `Linux_2k.log` was unignored in `backend/.gitignore` (`!research/agenticsoc/dataset/**/source/*.log`) and populated with the official LogHub Linux 2k dataset.
+   - Line endings on `LOGHUB-LICENSE.txt` were normalized to LF, matching pinned SHA256 checksums (`9ffa6ae259833cdc6e7ed8a0219fec72ef6455fb457b3c44096cb1ac1f0696d4`).
+2. **Repository Hygiene**:
+   - Restored previously deleted root repository files (`.gitmodules`, `AGENTS.md`, `README.md`, `README_ZH.md`) to maintain platform integrity.
+3. **PTA Core Defense Implementation**:
+   - Added `backend/apps/agentic/pta/` implementing mechanisms M1–M8:
+     - `taint.py`: T0/T1/T2 taint tracking and propagation.
+     - `canary.py`: Non-generative reassembly canary detection for fragmented S5 attacks.
+     - `policy_gate.py`: Capability air-gap and action policy gate.
+     - `dissent.py`: Statistical and validator-based dissent detector.
+     - `reader_decider.py`: Schema-constrained Reader with Decider air-gap.
+   - Added `backend/custom/playbooks/pta_investigation.py` for end-to-end hardened investigation playbooks.
+4. **Unit Tests Passing (91/91)**:
+   - All 81 research harness tests and 10 new PTA defense tests pass (`manage.py test apps.agentic research.agenticsoc`).
+5. **Evaluation Benchmark & Figures**:
+   - Documented benchmark results across local Ollama models (`qwen3:8b`, `qwen3:4b-instruct`, `foundation-sec-8b`) across 506 trials in `docs/research/results.md`.
+   - Included publication figures in `docs/research/figures/` (`ollama_fresh_run_cost.png`, `ollama_fresh_run_frr_by_k.png`, `ollama_fresh_run_isr_cbr.png`).
+
